@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import cron from 'node-cron';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,18 +10,19 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuração Supabase
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// Token do servidor de dashboard (CRÍTICO: nunca no front-end)
-const DASHBOARD_URL = process.env.DASHBOARD_URL;
-const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN;
-
 // ESM paths
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Configuração
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const DASHBOARD_URL = process.env.DASHBOARD_URL;
+const DASHBOARD_TOKEN = process.env.DASHBOARD_TOKEN;
+
+console.log('✅ Servidor iniciando...');
+console.log(`📊 Dashboard URL: ${DASHBOARD_URL}`);
+console.log(`🔐 Supabase URL: ${SUPABASE_URL}`);
 
 // Middlewares
 app.use(cors());
@@ -30,10 +30,9 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ========================================
-// AUTENTICAÇÃO
+// AUTENTICAÇÃO - Verificar token JWT
 // ========================================
 
-// Verificar token JWT e usuário autorizado
 async function verificarAuth(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -44,21 +43,36 @@ async function verificarAuth(req, res, next) {
   const token = authHeader.substring(7);
 
   try {
-    // Verificar token com Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    // Verificar token com Supabase Auth API
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        apikey: SUPABASE_KEY,
+      },
+    });
 
-    if (error || !user) {
+    if (!response.ok) {
       return res.status(401).json({ error: 'Token inválido' });
     }
 
-    // Verificar se usuário está na lista de autorizados
-    const { data: autorizado, error: erroCheck } = await supabase
-      .from('authorized_users')
-      .select('id')
-      .eq('email', user.email)
-      .single();
+    const user = await response.json();
 
-    if (erroCheck || !autorizado) {
+    // Verificar se está autorizado
+    const checkResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/authorized_users?email=eq.${encodeURIComponent(user.email)}`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+
+    const authorized = await checkResponse.json();
+
+    if (!Array.isArray(authorized) || authorized.length === 0) {
       return res.status(403).json({ error: 'Usuário não autorizado' });
     }
 
@@ -74,7 +88,6 @@ async function verificarAuth(req, res, next) {
 // ROTAS DE AUTENTICAÇÃO
 // ========================================
 
-// Login
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -83,29 +96,50 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    // Login com Supabase Auth
+    const response = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+      },
+      body: JSON.stringify({
+        email,
+        password,
+      }),
     });
 
-    if (error) {
+    if (!response.ok) {
+      const error = await response.json();
       return res.status(401).json({ error: 'Email ou senha inválidos' });
     }
 
-    // Verificar se usuário está autorizado
-    const { data: autorizado, error: erroCheck } = await supabase
-      .from('authorized_users')
-      .select('id')
-      .eq('email', email)
-      .single();
+    const data = await response.json();
 
-    if (erroCheck || !autorizado) {
+    // Verificar se está autorizado
+    const checkResponse = await fetch(
+      `${SUPABASE_URL}/rest/v1/authorized_users?email=eq.${encodeURIComponent(email)}`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
+
+    const authorized = await checkResponse.json();
+
+    if (!Array.isArray(authorized) || authorized.length === 0) {
       return res.status(403).json({ error: 'Usuário não autorizado' });
     }
 
     res.json({
-      token: data.session.access_token,
-      user: data.user,
+      token: data.access_token,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+      },
     });
   } catch (err) {
     console.error('Erro no login:', err);
@@ -113,60 +147,63 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Logout
-app.post('/api/auth/logout', async (req, res) => {
-  try {
-    await supabase.auth.signOut();
-    res.json({ message: 'Logout realizado' });
-  } catch (err) {
-    console.error('Erro no logout:', err);
-    res.status(500).json({ error: 'Erro no servidor' });
-  }
+app.post('/api/auth/logout', (req, res) => {
+  res.json({ message: 'Logout realizado' });
 });
 
 // ========================================
 // ROTAS DO DASHBOARD
 // ========================================
 
-// Buscar HTML em cache
 app.get('/api/dashboard', verificarAuth, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('dashboard_cache')
-      .select('html_content, fetched_at')
-      .order('fetched_at', { ascending: false })
-      .limit(1)
-      .single();
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/dashboard_cache?select=html_content,fetched_at&order=fetched_at.desc&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
 
-    if (error || !data) {
+    const data = await response.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
       return res.status(404).json({ error: 'Dashboard não disponível' });
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(data.html_content);
+    res.send(data[0].html_content);
   } catch (err) {
     console.error('Erro ao buscar dashboard:', err);
     res.status(500).json({ error: 'Erro no servidor' });
   }
 });
 
-// Verificar status da última sincronização
 app.get('/api/status', verificarAuth, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('dashboard_cache')
-      .select('fetched_at, status')
-      .order('fetched_at', { ascending: false })
-      .limit(1)
-      .single();
+    const response = await fetch(
+      `${SUPABASE_URL}/rest/v1/dashboard_cache?select=fetched_at,status&order=fetched_at.desc&limit=1`,
+      {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+      }
+    );
 
-    if (error || !data) {
+    const data = await response.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
       return res.status(404).json({ error: 'Sem dados de sincronização' });
     }
 
     res.json({
-      lastFetch: data.fetched_at,
-      status: data.status,
+      lastFetch: data[0].fetched_at,
+      status: data[0].status,
     });
   } catch (err) {
     console.error('Erro ao buscar status:', err);
@@ -194,17 +231,23 @@ async function sincronizarDashboard() {
 
     const htmlContent = await response.text();
 
-    // Armazenar no Supabase
-    const { error: erroInsert } = await supabase
-      .from('dashboard_cache')
-      .insert({
+    // Inserir no Supabase via API REST
+    const insertResponse = await fetch(`${SUPABASE_URL}/rest/v1/dashboard_cache`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+      },
+      body: JSON.stringify({
         html_content: htmlContent,
         status: 'success',
-      });
+      }),
+    });
 
-    if (erroInsert) {
-      console.error('[CRON] Erro ao inserir:', erroInsert.message);
-      throw new Error(`Erro ao armazenar: ${erroInsert.message}`);
+    if (!insertResponse.ok) {
+      const error = await insertResponse.json();
+      throw new Error(`Erro ao armazenar: ${error.message}`);
     }
 
     console.log('[CRON] Dashboard sincronizado com sucesso às', new Date().toISOString());
@@ -212,13 +255,18 @@ async function sincronizarDashboard() {
     console.error('[CRON] Erro na sincronização:', err.message);
 
     try {
-      // Registrar falha (melhor esforço)
-      await supabase
-        .from('dashboard_cache')
-        .insert({
+      await fetch(`${SUPABASE_URL}/rest/v1/dashboard_cache`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({
           html_content: '',
           status: 'failed',
-        });
+        }),
+      });
     } catch (erroFalha) {
       console.error('[CRON] Erro ao registrar falha:', erroFalha.message);
     }
@@ -229,13 +277,12 @@ async function sincronizarDashboard() {
 // AGENDADOR CRON
 // ========================================
 
-// Sincronizar diariamente às 8:00 AM
-// Formato: "minuto hora dia mês dia-da-semana"
 cron.schedule('0 8 * * *', sincronizarDashboard);
 
-// Sincronizar uma vez ao iniciar (para popular o banco inicial)
-console.log('[INIT] Sincronizando dashboard na inicialização...');
-sincronizarDashboard();
+// Sincronizar em background após 3 segundos
+setTimeout(() => {
+  sincronizarDashboard();
+}, 3000);
 
 // ========================================
 // HEALTH CHECK
@@ -251,6 +298,4 @@ app.get('/health', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
-  console.log(`📊 Dashboard URL: ${DASHBOARD_URL}`);
-  console.log(`🔐 Supabase URL: ${supabaseUrl}`);
 });
