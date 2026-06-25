@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solvee Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 1200px;
+      padding: 20px;
+    }
+
+    /* ========== LOGIN ========== */
+    .login-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      padding: 40px;
+      max-width: 400px;
+      margin: 0 auto;
+    }
+
+    .login-container h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 30px;
+      font-size: 28px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      color: #555;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.3s;
+    }
+
+    .form-group input:focus {
+      outline: none;
+      border-color: #667eea;
+      background-color: #f8f9ff;
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .btn-login:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .btn-login:active {
+      transform: translateY(0);
+    }
+
+    .btn-login:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .error-message {
+      background: #fee;
+      color: #c33;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      display: none;
+      font-size: 14px;
+      border-left: 4px solid #c33;
+    }
+
+    /* ========== DASHBOARD ========== */
+    .dashboard-container {
+      display: none;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+    }
+
+    .dashboard-header {
+      background: white;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .dashboard-header h1 {
+      color: #333;
+      font-size: 24px;
+    }
+
+    .header-info {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .user-email {
+      color: #666;
+      font-size: 14px;
+    }
+
+    .status {
+      font-size: 12px;
+      color: #999;
+    }
+
+    .btn-logout {
+      padding: 8px 16px;
+      background: #f0f0f0;
+      color: #333;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+
+    .btn-logout:hover {
+      background: #e0e0e0;
+    }
+
+    .dashboard-content {
+      flex: 1;
+      overflow: auto;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .iframe-container {
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      overflow: hidden;
+    }
+
+    .dashboard-content iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #999;
+    }
+
+    .spinner {
+      border: 4px solid #f0f0f0;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin-right: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <!-- TELA DE LOGIN -->
+  <div class="container" id="loginContainer">
+    <div class="login-container">
+      <h1>🎯 Solvee Dashboard</h1>
+
+      <div class="error-message" id="errorMessage"></div>
+
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            required
+            placeholder="seu@email.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Senha</label>
+          <input
+            type="password"
+            id="password"
+            name="password"
+            required
+            placeholder="••••••••"
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button type="submit" class="btn-login" id="btnLogin">
+          Entrar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- TELA DO DASHBOARD -->
+  <div class="dashboard-container" id="dashboardContainer">
+    <div class="dashboard-header">
+      <h1>📊 Dashboard Solvee</h1>
+      <div class="header-info">
+        <div>
+          <div class="user-email" id="userEmail"></div>
+          <div class="status" id="lastSync"></div>
+        </div>
+        <button class="btn-logout" id="btnLogout">Sair</button>
+      </div>
+    </div>
+
+    <div class="dashboard-content">
+      <div class="iframe-container" id="dashboardContent">
+        <div class="loading">
+          <div class="spinner"></div>
+          <span>Carregando dashboard...</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let authToken = localStorage.getItem('authToken');
+    let currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+
+    // ========================================
+    // VERIFICAR AUTENTICAÇÃO AO CARREGAR
+    // ========================================
+    if (authToken && currentUser.email) {
+      mostrarDashboard();
+    } else {
+      mostrarLogin();
+    }
+
+    // ========================================
+    // FUNÇÕES DE UI
+    // ========================================
+
+    function mostrarLogin() {
+      document.getElementById('loginContainer').style.display = 'block';
+      document.getElementById('dashboardContainer').style.display = 'none';
+      document.body.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+      document.body.style.display = 'flex';
+    }
+
+    function mostrarDashboard() {
+      document.getElementById('loginContainer').style.display = 'none';
+      document.getElementById('dashboardContainer').style.display = 'flex';
+      document.body.style.background = '#f5f5f5';
+      document.body.style.display = 'flex';
+
+      document.getElementById('userEmail').textContent = `Olá, ${currentUser.email}`;
+      carregarDashboard();
+      atualizarStatus();
+    }
+
+    function mostrarErro(msg) {
+      const errorDiv = document.getElementById('errorMessage');
+      errorDiv.textContent = msg;
+      errorDiv.style.display = 'block';
+      setTimeout(() => {
+        errorDiv.style.display = 'none';
+      }, 5000);
+    }
+
+    // ========================================
+    // LOGIN
+    // ========================================
+
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const btnLogin = document.getElementById('btnLogin');
+
+      btnLogin.disabled = true;
+      btnLogin.textContent = 'Entrando...';
+
+      try {
+        const response = await fetch(`${API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Erro no login');
+        }
+
+        // Armazenar token e usuário
+        authToken = data.token;
+        currentUser = data.user;
+
+        localStorage.setItem('authToken', authToken);
+        localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+        mostrarDashboard();
+      } catch (err) {
+        console.error('Erro no login:', err);
+        mostrarErro(err.message);
+      } finally {
+        btnLogin.disabled = false;
+        btnLogin.textContent = 'Entrar';
+      }
+    });
+
+    // ========================================
+    // LOGOUT
+    // ========================================
+
+    document.getElementById('btnLogout').addEventListener('click', () => {
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
+      authToken = null;
+      currentUser = {};
+      mostrarLogin();
+    });
+
+    // ========================================
+    // CARREGAR DASHBOARD
+    // ========================================
+
+    async function carregarDashboard() {
+      if (!authToken) {
+        mostrarErro('Não autenticado');
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE}/api/dashboard`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erro ao buscar dashboard: ${response.status}`);
+        }
+
+        const htmlContent = await response.text();
+
+        // Injetar HTML no container
+        const container = document.getElementById('dashboardContent');
+        container.innerHTML = htmlContent;
+      } catch (err) {
+        console.error('Erro ao carregar dashboard:', err);
+        document.getElementById('dashboardContent').innerHTML =
+          `<div class="loading" style="color: #c33;">❌ Erro ao carregar dashboard</div>`;
+      }
+    }
+
+    // ========================================
+    // ATUALIZAR STATUS
+    // ========================================
+
+    async function atualizarStatus() {
+      if (!authToken) return;
+
+      try {
+        const response = await fetch(`${API_BASE}/api/status`, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+          },
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const lastFetch = new Date(data.lastFetch);
+        const agora = new Date();
+        const diffMinutos = Math.floor((agora - lastFetch) / 60000);
+
+        let textoStatus = `Atualizado há ${diffMinutos}m`;
+        if (diffMinutos < 1) textoStatus = 'Atualizado agora';
+        if (diffMinutos > 1440) textoStatus = `Atualizado há ${Math.floor(diffMinutos / 1440)}d`;
+
+        document.getElementById('lastSync').textContent = textoStatus;
+      } catch (err) {
+        console.error('Erro ao atualizar status:', err);
+      }
+    }
+
+    // Atualizar status a cada 5 minutos
+    setInterval(atualizarStatus, 5 * 60 * 1000);
+  </script>
+</body>
+</html>
