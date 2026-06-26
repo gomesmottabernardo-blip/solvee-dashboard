@@ -72,7 +72,12 @@ async function verificarAuth(req, res, next) {
 
     const authorized = await checkResponse.json();
 
+    console.log('[DEBUG] Email:', email);
+    console.log('[DEBUG] Response status:', checkResponse.status);
+    console.log('[DEBUG] Authorized:', JSON.stringify(authorized));
+
     if (!Array.isArray(authorized) || authorized.length === 0) {
+      console.log('[DEBUG] Não encontrado em authorized_users');
       return res.status(403).json({ error: 'Usuário não autorizado' });
     }
 
@@ -130,7 +135,12 @@ app.post('/api/auth/login', async (req, res) => {
 
     const authorized = await checkResponse.json();
 
+    console.log('[DEBUG] Email:', email);
+    console.log('[DEBUG] Response status:', checkResponse.status);
+    console.log('[DEBUG] Authorized:', JSON.stringify(authorized));
+
     if (!Array.isArray(authorized) || authorized.length === 0) {
+      console.log('[DEBUG] Não encontrado em authorized_users');
       return res.status(403).json({ error: 'Usuário não autorizado' });
     }
 
