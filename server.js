@@ -72,7 +72,7 @@ async function verificarAuth(req, res, next) {
 
     const authorized = await checkResponse.json();
 
-    console.log('[DEBUG] Email:', email);
+    console.log('[DEBUG] Email:', user.email);
     console.log('[DEBUG] Response status:', checkResponse.status);
     console.log('[DEBUG] Authorized:', JSON.stringify(authorized));
 
